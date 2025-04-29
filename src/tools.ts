@@ -4,12 +4,85 @@
  */
 import { tool } from "ai";
 import { z } from "zod";
+//import { agentContext } from "./context";
 
-import { agentContext } from "./server";
+
+//import { agentContext } from "./server"; ---HERE IF NEEDED--------------
 import {
   unstable_getSchedulePrompt,
   unstable_scheduleSchema,
 } from "agents/schedule";
+
+
+const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID!;
+const CF_API_TOKEN = process.env.CF_API_TOKEN!;
+const VECTORIZE_INDEX_NAME = process.env.VECTORIZE_INDEX_NAME!;
+
+
+
+const searchDocuments = tool({
+  description: "Search planning documents using a query and optional local authority",
+  parameters: z.object({
+    query: z.string(),
+    localAuthority: z.string().optional(),
+  }),
+  execute: async ({ query, localAuthority }) => {
+    console.log("searchdocuments triggered");
+    console.log("query:", query);
+    console.log("local authority:", localAuthority || "none");
+    
+    // Step 1: Embed the query
+    const embedRes = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/run/@cf/baai/bge-base-en-v1.5`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${CF_API_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text: query }),
+      }
+    );
+
+    const embedData = await embedRes.json();
+    const embedding = embedData.result;
+    console.log("Embedding result:", embedding);  
+    // Step 2: Query Vectorize
+    const vectorRes = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/vectorize/indexes/${VECTORIZE_INDEX_NAME}/query`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${CF_API_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          vector: embedding,
+          topK: 5,
+          filter: localAuthority
+            ? { local_authority: localAuthority.toLowerCase() }
+            : undefined,
+        }),
+      }
+    );
+
+    const vectorData = await vectorRes.json();
+    console.log("vectorize result", json.stringify(vectorData, null, 2));
+    const chunks = vectorData?.result?.matches ?? [];
+
+
+    if (chunks.length === 0) {
+      console.log("no relevant chunks found");
+      return "No relevant documents found.";
+    }
+
+    return chunks
+      .map((chunk, i) => `Result ${i + 1}:\n${chunk.metadata?.text || ""}`)
+      .join("\n\n---\n\n");
+  },
+});
+
+
 
 /**
  * Weather information tool that requires human confirmation
@@ -36,98 +109,19 @@ const getLocalTime = tool({
   },
 });
 
-const scheduleTask = tool({
-  description: "A tool to schedule a task to be executed at a later time",
-  parameters: unstable_scheduleSchema,
-  execute: async ({ when, description }) => {
-    // we can now read the agent context from the ALS store
-    const agent = agentContext.getStore();
-    if (!agent) {
-      throw new Error("No agent found");
-    }
-    function throwError(msg: string): string {
-      throw new Error(msg);
-    }
-    if (when.type === "no-schedule") {
-      return "Not a valid schedule input";
-    }
-    const input =
-      when.type === "scheduled"
-        ? when.date // scheduled
-        : when.type === "delayed"
-          ? when.delayInSeconds // delayed
-          : when.type === "cron"
-            ? when.cron // cron
-            : throwError("not a valid schedule input");
-    try {
-      agent.schedule(input!, "executeTask", description);
-    } catch (error) {
-      console.error("error scheduling task", error);
-      return `Error scheduling task: ${error}`;
-    }
-    return `Task scheduled for type "${when.type}" : ${input}`;
-  },
-});
 
-/**
- * Tool to list all scheduled tasks
- * This executes automatically without requiring human confirmation
- */
-const getScheduledTasks = tool({
-  description: "List all tasks that have been scheduled",
-  parameters: z.object({}),
-  execute: async () => {
-    const agent = agentContext.getStore();
-    if (!agent) {
-      throw new Error("No agent found");
-    }
-    try {
-      const tasks = agent.getSchedules();
-      if (!tasks || tasks.length === 0) {
-        return "No scheduled tasks found.";
-      }
-      return tasks;
-    } catch (error) {
-      console.error("Error listing scheduled tasks", error);
-      return `Error listing scheduled tasks: ${error}`;
-    }
-  },
-});
-
-/**
- * Tool to cancel a scheduled task by its ID
- * This executes automatically without requiring human confirmation
- */
-const cancelScheduledTask = tool({
-  description: "Cancel a scheduled task using its ID",
-  parameters: z.object({
-    taskId: z.string().describe("The ID of the task to cancel"),
-  }),
-  execute: async ({ taskId }) => {
-    const agent = agentContext.getStore();
-    if (!agent) {
-      throw new Error("No agent found");
-    }
-    try {
-      await agent.cancelSchedule(taskId);
-      return `Task ${taskId} has been successfully canceled.`;
-    } catch (error) {
-      console.error("Error canceling scheduled task", error);
-      return `Error canceling task ${taskId}: ${error}`;
-    }
-  },
-});
 
 /**
  * Export all available tools
  * These will be provided to the AI model to describe available capabilities
  */
 export const tools = {
+  searchDocuments,  //my one
   getWeatherInformation,
   getLocalTime,
-  scheduleTask,
-  getScheduledTasks,
-  cancelScheduledTask,
+  //scheduleTask,
+  //getScheduledTasks,
+  //cancelScheduledTask,
 };
 
 /**

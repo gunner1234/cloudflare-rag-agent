@@ -9,13 +9,16 @@ import {
   streamText,
   type StreamTextOnFinishCallback,
 } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { createWorkersAI } from 'workers-ai-provider';
 import { processToolCalls } from "./utils";
 import { tools, executions } from "./tools";
-import { AsyncLocalStorage } from "node:async_hooks";
+//import { agentContext } from "./context"; //NEW ADDED
+
+//import { AsyncLocalStorage } from "node:async_hooks";  CAN ADD BACK LATER 
 // import { env } from "cloudflare:workers";
 
-const model = openai("gpt-4o-2024-11-20");
+
+
 // Cloudflare AI Gateway
 // const openai = createOpenAI({
 //   apiKey: env.OPENAI_API_KEY,
@@ -23,7 +26,7 @@ const model = openai("gpt-4o-2024-11-20");
 // });
 
 // we use ALS to expose the agent context to the tools
-export const agentContext = new AsyncLocalStorage<Chat>();
+//export const agentContext = new AsyncLocalStorage<Chat>();   ----HERE IF NEEDED-------------
 /**
  * Chat Agent implementation that handles real-time AI chat interactions
  */
@@ -34,59 +37,46 @@ export class Chat extends AIChatAgent<Env> {
    */
 
   // biome-ignore lint/complexity/noBannedTypes: <explanation>
-  async onChatMessage(onFinish: StreamTextOnFinishCallback<{}>) {
-    // Create a streaming response that handles both text and tool outputs
-    return agentContext.run(this, async () => {
-      const dataStreamResponse = createDataStreamResponse({
-        execute: async (dataStream) => {
-          // Process any pending tool calls from previous messages
-          // This handles human-in-the-loop confirmations for tools
-          const processedMessages = await processToolCalls({
-            messages: this.messages,
-            dataStream,
-            tools,
-            executions,
-          });
-
-          // Stream the AI response using GPT-4
-          const result = streamText({
-            model,
-            system: `You are a helpful assistant that can do various tasks... 
-
-${unstable_getSchedulePrompt({ date: new Date() })}
-
-If the user asks to schedule a task, use the schedule tool to schedule the task.
-`,
-            messages: processedMessages,
-            tools,
-            onFinish,
-            onError: (error) => {
-              console.error("Error while streaming:", error);
-            },
-            maxSteps: 10,
-          });
-
-          // Merge the AI response stream with tool execution outputs
-          result.mergeIntoDataStream(dataStream);
-        },
-      });
-
-      return dataStreamResponse;
-    });
-  }
-  async executeTask(description: string, task: Schedule<string>) {
-    await this.saveMessages([
-      ...this.messages,
-      {
-        id: generateId(),
-        role: "user",
-        content: `Running scheduled task: ${description}`,
-        createdAt: new Date(),
+  async onChatMessage(onFinish: StreamTextOnFinishCallback<{}>, env: Env) {
+    console.log("env.AI_MODEL:", env.AI_MODEL);
+    console.log("model init start");
+    console.log("onChatMessage triggered");
+  
+    const dataStreamResponse = createDataStreamResponse({
+      execute: async (dataStream) => {
+        const processedMessages = await processToolCalls({
+          messages: this.messages,
+          dataStream,
+          tools,
+          executions,
+        });
+  
+        const workersai = createWorkersAI({ binding: env.AI_MODEL });
+        console.log("model created:", model);
+        const model = workersai("@cf/meta/llama-3-8b-instruct");
+  
+        const result = streamText({
+          model,
+          system: `You are a helpful assistant that can do various tasks...`,
+          messages: processedMessages,
+          tools,
+          onFinish,
+          onError: (error) => {
+            console.error("Error while streaming:", error);
+          },
+          maxSteps: 10,
+        });
+  
+        result.mergeIntoDataStream(dataStream);
+        return dataStream;
       },
-    ]);
+    });
+  
+    return dataStreamResponse;
   }
-}
-
+  
+  }
+ 
 /**
  * Worker entry point that routes incoming requests to the appropriate handler
  */
