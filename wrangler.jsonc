@@ -2,11 +2,11 @@
   "name": "my-chat-agent",
   "main": "src/server.ts",
   "compatibility_date": "2025-02-04",
-  "compatibility_flags": ["nodejs_compat"],
-  //"compatibility_flags": [
-   // "nodejs_compact",
-  //  "nodejs_compact_populate_process_env"
-  //],
+  "compatibility_flags": [
+    "nodejs_compat",
+    "nodejs_compat_populate_process_env"
+  ],
+  
   "ai": {
     "binding": "AI_MODEL"
   },

@@ -15,7 +15,7 @@ import { tools, executions } from "./tools";
 //import { agentContext } from "./context"; //NEW ADDED
 
 //import { AsyncLocalStorage } from "node:async_hooks";  CAN ADD BACK LATER 
-// import { env } from "cloudflare:workers";
+//import { env } from "cloudflare:workers";
 
 
 
@@ -37,8 +37,9 @@ export class Chat extends AIChatAgent<Env> {
    */
 
   // biome-ignore lint/complexity/noBannedTypes: <explanation>
-  async onChatMessage(onFinish: StreamTextOnFinishCallback<{}>, env: Env) {
-    console.log("env.AI_MODEL:", env.AI_MODEL);
+  async onChatMessage(onFinish: StreamTextOnFinishCallback<{}>) {
+  
+    console.log("env.AI_MODEL:", this.env.AI_MODEL);
     console.log("model init start");
     console.log("onChatMessage triggered");
   
@@ -51,9 +52,9 @@ export class Chat extends AIChatAgent<Env> {
           executions,
         });
   
-        const workersai = createWorkersAI({ binding: env.AI_MODEL });
+        const workersai = createWorkersAI({ binding: this.env.AI_MODEL });  
+        const model = workersai("@cf/meta/llama-3-8b-instruct");       //change back to  env.AI_MODEL if needs be 
         console.log("model created:", model);
-        const model = workersai("@cf/meta/llama-3-8b-instruct");
   
         const result = streamText({
           model,
@@ -85,12 +86,12 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/check-open-ai-key") {
-      const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
+      const hasOpenAIKey = !!env.OPENAI_API_KEY;  //if needs be add .process back to the front 
       return Response.json({
         success: hasOpenAIKey,
       });
     }
-    if (!process.env.OPENAI_API_KEY) {
+    if (!env.OPENAI_API_KEY) {   //again here add procces. infront if needs be
       console.error(
         "OPENAI_API_KEY is not set, don't forget to set it locally in .dev.vars, and use `wrangler secret bulk .dev.vars` to upload it to production"
       );
