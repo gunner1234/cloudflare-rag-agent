@@ -26,5 +26,14 @@
       "tag": "v1",
       "new_sqlite_classes": ["Chat"]
     }
+  ],
+  "vectorize": [
+    {
+      "binding": "VDB",
+      "index_name": "embedding-index"
+    }
   ]
+  
+
+
 }
