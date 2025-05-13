@@ -116,7 +116,7 @@ const getLocalTime = tool({
  * These will be provided to the AI model to describe available capabilities
  */
 export const tools = {
-  searchDocuments,  //my one
+  //searchDocuments,  //my one
   getWeatherInformation,
   getLocalTime,
   //scheduleTask,

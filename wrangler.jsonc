@@ -7,9 +7,12 @@
     "nodejs_compat_populate_process_env"
   ],
   
-  "ai": {
-    "binding": "AI_MODEL"
-  },
+  "ai": 
+    {
+      "binding": "AI_MODEL"
+    },
+    
+  
   "assets": {
     "directory": "public"
   },
@@ -30,7 +33,7 @@
   "vectorize": [
     {
       "binding": "VDB",
-      "index_name": "embedding-index"
+      "index_name": "embeddings-index"
     }
   ]
   
